@@ -1102,6 +1102,7 @@ end
 
 while not state.shouldUnload do
     ui:Step()
+    task.wait()
 end
 
 fallbackLoopAlive = false
