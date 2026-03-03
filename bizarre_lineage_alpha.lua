@@ -568,11 +568,13 @@ local function renderItemESP()
 end
 
 local _, settingsSection = ui:CreateSettingsTab("Settings")
+local tabInfo 	 = ui:Tab("Info")
 local tabCollect = ui:Tab("Collect")
 local tabMain    = ui:Tab("Main")
 local movementSection    = tabMain:Section("Movement")
 local espSection         = tabMain:Section("ESP")
 local autoCollectSection = tabCollect:Section("Auto Collect")
+local infoSection		 = tabInfo:Section("IMPORTANT")
 
 ui:SetMenuSize(Vector2.new(760, 560))
 ui:CenterMenu()
@@ -659,7 +661,14 @@ end)
 settingsSection:Button("Unload", function() state.shouldUnload = true end)
 _G.__bizzareLineageUnload = function() state.shouldUnload = true end
 
+infoSection:Button("DONT DM LIKETY FOR HELP")
+infoSection:Button("-----------------------")
+infoSection:Button("FOR ANY HELP REGARDING")
+infoSection:Button("THE SCRIPT DM: BigJose42")
+
 ui:Notification("Default binds: '[' = Lock Y | ']' = Item ESP", 6)
+ui:Notification("PLEASE: dont dm likety for help with the script", 6)
+ui:Notification("for help dm me: BigJose42", 6)
 
 local lastFrameTime = os.clock()
 
