@@ -578,7 +578,7 @@ local infoSection		 = tabInfo:Section("IMPORTANT")
 
 ui:SetMenuSize(Vector2.new(760, 560))
 ui:CenterMenu()
-ui:SetMenuTitle("Bizzare Lineage [alpha]")
+ui:SetMenuTitle("Bizzare Lineage [stable]")
 ui:SetWatermarkEnabled(false)
 
 movementSection:Slider("Lock Y", state.lockYValue, 1, config.lockYMin, config.lockYMax, "", function(v)
