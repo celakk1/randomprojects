@@ -131,16 +131,22 @@ local itemWorldPartCache = {}
 
 local uiIds = {
 	keepY = "bl_keepY",
-	keepYLevel = "bl_keepYLevel",
+	keepYLevelOffset = "bl_keepYLevelOffset",
+	keepYKeybind = "bl_keepYKeybind",
 	itemEsp = "bl_itemEsp",
+	itemEspKeybind = "bl_itemEspKeybind",
 	espShowBox = "bl_espShowBox",
 	espRainbowBox = "bl_espRainbowBox",
 	autoCollect = "bl_autoCollect",
+	autoCollectKeybind = "bl_autoCollectKeybind",
 	collectFlySpeed = "bl_collectFlySpeed",
 	collectArrivalDistance = "bl_collectArrivalDistance",
 	collectUnderMapYOffset = "bl_collectUnderMapYOffset",
 	autoCollectSkipOccupied = "bl_autoCollectSkipOccupied"
 }
+
+local uiStateInitialized = false
+local keybindDownState = {}
 
 -- self explanatory
 local function getRootPart()
@@ -830,11 +836,11 @@ local function setKeepYEnabled(enabled)
 
 	state.keepY = enabled
 
-	if state.autoCollect then
-		return
-	end
-
 	if enabled then
+		if state.autoCollect then
+			return
+		end
+
 		local root = getRootPart()
 
 		if root then
@@ -922,51 +928,146 @@ local function setAutoCollectEnabled(enabled)
 	state.keepYWasEnabledBeforeCollect = false
 end
 
+local function initializeUiState()
+	if uiStateInitialized then
+		return
+	end
+
+	uiStateInitialized = true
+
+	UI.SetValue(uiIds.keepY, state.keepY)
+	UI.SetValue(uiIds.keepYLevelOffset, state.keepYLevel - conf.keepYMinLevel)
+	UI.SetValue(uiIds.itemEsp, state.itemEsp)
+	UI.SetValue(uiIds.espShowBox, state.espShowBox)
+	UI.SetValue(uiIds.espRainbowBox, state.espRainbowBox)
+	UI.SetValue(uiIds.autoCollect, state.autoCollect)
+	UI.SetValue(uiIds.collectFlySpeed, state.collectFlySpeed)
+	UI.SetValue(uiIds.collectArrivalDistance, state.collectArrivalDistance)
+	UI.SetValue(uiIds.collectUnderMapYOffset, state.collectUnderMapYOffset)
+	UI.SetValue(uiIds.autoCollectSkipOccupied, state.autoCollectSkipOccupied)
+end
+
+local function getUiNumber(id, fallback, minValue, maxValue)
+	local value = UI.GetValue(id)
+	if type(value) ~= "number" then
+		return fallback
+	end
+
+	if minValue and value < minValue then
+		return minValue
+	end
+
+	if maxValue and value > maxValue then
+		return maxValue
+	end
+
+	return value
+end
+
+local function getUiBoolean(id, fallback)
+	local value = UI.GetValue(id)
+	if type(value) == "boolean" then
+		return value
+	end
+
+	return fallback
+end
+
+local function processUiKeybind(id, callback)
+	local isActive = getUiBoolean(id, false)
+	local wasActive = keybindDownState[id] == true
+	keybindDownState[id] = isActive
+
+	if isActive and not wasActive then
+		callback()
+	end
+end
+
+local function syncStateFromUi()
+	processUiKeybind(uiIds.keepYKeybind, function()
+		UI.SetValue(uiIds.keepY, not state.keepY)
+	end)
+
+	processUiKeybind(uiIds.itemEspKeybind, function()
+		UI.SetValue(uiIds.itemEsp, not state.itemEsp)
+	end)
+
+	processUiKeybind(uiIds.autoCollectKeybind, function()
+		UI.SetValue(uiIds.autoCollect, not state.autoCollect)
+	end)
+
+	local keepYEnabled = getUiBoolean(uiIds.keepY, state.keepY)
+	if keepYEnabled ~= state.keepY then
+		setKeepYEnabled(keepYEnabled)
+	end
+
+	local keepYLevelOffset = getUiNumber(
+		uiIds.keepYLevelOffset,
+		state.keepYLevel - conf.keepYMinLevel,
+		0,
+		conf.keepYMaxLevel - conf.keepYMinLevel
+	)
+	local keepYLevel = conf.keepYMinLevel + keepYLevelOffset
+	if keepYLevel ~= state.keepYLevel then
+		state.keepYLevel = keepYLevel
+		if state.keepY then
+			applyKeepYPosition(true)
+		end
+	end
+
+	local itemEspEnabled = getUiBoolean(uiIds.itemEsp, state.itemEsp)
+	if itemEspEnabled ~= state.itemEsp then
+		setItemEspEnabled(itemEspEnabled)
+	end
+
+	state.espShowBox = getUiBoolean(uiIds.espShowBox, state.espShowBox)
+	state.espRainbowBox = getUiBoolean(uiIds.espRainbowBox, state.espRainbowBox)
+
+	local autoCollectEnabled = getUiBoolean(uiIds.autoCollect, state.autoCollect)
+	if autoCollectEnabled ~= state.autoCollect then
+		setAutoCollectEnabled(autoCollectEnabled)
+	end
+
+	state.collectFlySpeed = getUiNumber(uiIds.collectFlySpeed, state.collectFlySpeed, conf.collectFlySpeedMin, conf.collectFlySpeedMax)
+	state.collectArrivalDistance = getUiNumber(uiIds.collectArrivalDistance, state.collectArrivalDistance, conf.collectArrivalDistanceMin, conf.collectArrivalDistanceMax)
+	state.collectUnderMapYOffset = getUiNumber(uiIds.collectUnderMapYOffset, state.collectUnderMapYOffset, conf.collectUnderMapYOffsetMin, conf.collectUnderMapYOffsetMax)
+	state.autoCollectSkipOccupied = getUiBoolean(uiIds.autoCollectSkipOccupied, state.autoCollectSkipOccupied)
+end
+
 local function createUi()
 	pcall(function()
 		UI.RemoveTab(uiTabName)
 	end)
 
+	initializeUiState()
+
 	UI.AddTab(uiTabName, function(tab)
 		local movementSection = tab:Section("Movement", "Left")
-		movementSection:Toggle(uiIds.keepY, "Keep Y (use this to void dio)", state.keepY, function(enabled)
-			setKeepYEnabled(enabled)
-		end)
-		movementSection:SliderInt(uiIds.keepYLevel, "Y level", conf.keepYMinLevel, conf.keepYMaxLevel, state.keepYLevel, function(value)
-			state.keepYLevel = value
-
-			if state.keepY then
-				applyKeepYPosition(true)
-			end
-		end)
+		movementSection:Toggle(uiIds.keepY, "Keep Y (use this to void dio)")
+		local keepYKeybind = movementSection:Keybind(uiIds.keepYKeybind, 0, "click")
+		keepYKeybind:AddToHotkey("Keep Y", uiIds.keepY)
+		movementSection:SliderInt(
+			uiIds.keepYLevelOffset,
+			"Y level",
+			0,
+			conf.keepYMaxLevel - conf.keepYMinLevel
+		)
 
 		local espSection = tab:Section("ESP", "Left")
-		espSection:Toggle(uiIds.itemEsp, "Item ESP", state.itemEsp, function(enabled)
-			setItemEspEnabled(enabled)
-		end)
-		espSection:Toggle(uiIds.espShowBox, "Show Box", state.espShowBox, function(value)
-			state.espShowBox = value
-		end)
-		espSection:Toggle(uiIds.espRainbowBox, "Rainbow Box", state.espRainbowBox, function(value)
-			state.espRainbowBox = value
-		end)
+		espSection:Toggle(uiIds.itemEsp, "Item ESP")
+		local itemEspKeybind = espSection:Keybind(uiIds.itemEspKeybind, 0, "click")
+		itemEspKeybind:AddToHotkey("Item ESP", uiIds.itemEsp)
+		espSection:Toggle(uiIds.espShowBox, "Show Box")
+		espSection:Toggle(uiIds.espRainbowBox, "Rainbow Box")
 
 		local autoCollectSection = tab:Section("Auto Collect", "Right")
-		autoCollectSection:Toggle(uiIds.autoCollect, "Auto Collect", state.autoCollect, function(enabled)
-			setAutoCollectEnabled(enabled)
-		end)
-		autoCollectSection:SliderInt(uiIds.collectFlySpeed, "Fly Speed", conf.collectFlySpeedMin, conf.collectFlySpeedMax, state.collectFlySpeed, function(value)
-			state.collectFlySpeed = value
-		end)
-		autoCollectSection:SliderInt(uiIds.collectArrivalDistance, "Arrival Dist", conf.collectArrivalDistanceMin, conf.collectArrivalDistanceMax, state.collectArrivalDistance, function(value)
-			state.collectArrivalDistance = value
-		end)
-		autoCollectSection:SliderInt(uiIds.collectUnderMapYOffset, "UnderMap +Y", conf.collectUnderMapYOffsetMin, conf.collectUnderMapYOffsetMax, state.collectUnderMapYOffset, function(value)
-			state.collectUnderMapYOffset = value
-		end)
-		autoCollectSection:Toggle(uiIds.autoCollectSkipOccupied, "Skip Occupied", state.autoCollectSkipOccupied, function(value)
-			state.autoCollectSkipOccupied = value
-		end)
+		autoCollectSection:Toggle(uiIds.autoCollect, "Auto Collect")
+		local autoCollectKeybind = autoCollectSection:Keybind(uiIds.autoCollectKeybind, 0, "click")
+		autoCollectKeybind:AddToHotkey("Auto Collect", uiIds.autoCollect)
+		autoCollectSection:SliderInt(uiIds.collectFlySpeed, "Fly Speed", conf.collectFlySpeedMin, conf.collectFlySpeedMax)
+		autoCollectSection:SliderInt(uiIds.collectArrivalDistance, "Arrival Dist", conf.collectArrivalDistanceMin, conf.collectArrivalDistanceMax)
+		autoCollectSection:SliderInt(uiIds.collectUnderMapYOffset, "UnderMap +Y", conf.collectUnderMapYOffsetMin, conf.collectUnderMapYOffsetMax)
+		autoCollectSection:Toggle(uiIds.autoCollectSkipOccupied, "Skip Occupied")
 
 		local settingsSection = tab:Section("Settings", "Right")
 		settingsSection:Button("Unload", function()
@@ -994,6 +1095,8 @@ local function updateFrame()
 	local now = os.clock()
 	local deltaTime = math.min(now - lastFrameTime, 0.1)
 	lastFrameTime = now
+
+	syncStateFromUi()
 
 	if state.keepY and not state.autoCollect then
 		stepKeepYSquareMovement(deltaTime)
