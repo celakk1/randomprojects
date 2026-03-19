@@ -1,12 +1,12 @@
--- UI LIBRARY AND SUM OTHER BULLSHIIT
-loadstring(game:HttpGet('https://raw.githubusercontent.com/catowice/p/main/library.lua'))()
-
-local ui = UILib
-if not ui then return end
+if not UI or not UI.AddTab then
+	warn("Matcha built-in UI is not available.")
+	return
+end
 
 local players = game:GetService("Players")
 local workspace = game:GetService("Workspace")
 local player = players.LocalPlayer
+local uiTabName = "Bizzare Lineage"
 
 -- config duh
 local conf = {
@@ -131,19 +131,21 @@ if _G.__bizzareLineageUnload then
 	task.wait(0.05)
 end
 
--- self explanatory
-local keybinds = {
-	keepY = nil,
-	itemEsp = nil,
-	autoCollect = nil
-}
-
-local keyDownState = {}
 local itemDrawings = {}
 local itemWorldPartCache = {}
-local keepY
-local itemEspToggle
-local autoCollectToggle
+
+local uiIds = {
+	keepY = "bl_keepY",
+	keepYLevel = "bl_keepYLevel",
+	itemEsp = "bl_itemEsp",
+	espShowBox = "bl_espShowBox",
+	espRainbowBox = "bl_espRainbowBox",
+	autoCollect = "bl_autoCollect",
+	collectFlySpeed = "bl_collectFlySpeed",
+	collectArrivalDistance = "bl_collectArrivalDistance",
+	collectUnderMapYOffset = "bl_collectUnderMapYOffset",
+	autoCollectSkipOccupied = "bl_autoCollectSkipOccupied"
+}
 
 -- self explanatory
 local function getRootPart()
@@ -816,190 +818,176 @@ local function renderItemEsp()
 	end
 end
 
--- i wonder what this does
-local function createUi()
-	local _, settingsSection = ui:CreateSettingsTab("Settings")
-
-	local tabInfo = ui:Tab("Info")
-	local tabCollect = ui:Tab("Collect")
-	local tabMain = ui:Tab("Main")
-
-	local movementSection = tabMain:Section("Movement")
-	local espSection = tabMain:Section("ESP")
-	local autoCollectSection = tabCollect:Section("Auto Collect")
-	local infoSection = tabInfo:Section("IMPORTANT")
-
-	ui:SetMenuSize(Vector2.new(760, 370))
-	ui:CenterMenu()
-	ui:SetMenuTitle("Bizzare Lineage | rewriting this no joke | alpha")
-	ui:SetWatermarkEnabled(false)
-
-	keepY = movementSection:Toggle("keep Y (use this to void dio)", false, function(enabled)
-		state.keepY = enabled
-
-		if state.autoCollect then
-			return
-		end
-
-		if enabled then
-			local root = getRootPart()
-
-			if root then
-				local pos = root.Position
-				state.cachedReturnPosition = Vector3.new(pos.X, pos.Y, pos.Z)
-				state.keepYMotionOrigin = Vector3.new(pos.X, state.keepYLevel, pos.Z)
-			else
-				state.cachedReturnPosition = nil
-				state.keepYMotionOrigin = nil
-			end
-
-			state.keepYOffsetX = 0
-			state.keepYOffsetZ = 0
-			state.keepYDirection = 1
-
-			applyKeepYPosition(true)
-		else
-			local root = getRootPart()
-			local cached = state.cachedReturnPosition
-
-			if root and cached then
-				pcall(function()
-					root.Position = cached + Vector3.new(0, 10, 0)
-				end)
-			end
-
-			state.cachedReturnPosition = nil
-			state.keepYMotionOrigin = nil
-			state.keepYOffsetX = 0
-			state.keepYOffsetZ = 0
-			state.keepYDirection = 1
-		end
+local function pushNotification(text, duration)
+	local ok = pcall(function()
+		notify(text, uiTabName, duration or 4)
 	end)
 
-	movementSection:Slider("Y level", state.keepYLevel, conf.keepYStep, conf.keepYMinLevel, conf.keepYMaxLevel, "", function(v)
-		state.keepYLevel = v
-
-		if state.keepY then
-			applyKeepYPosition(true)
-		end
-	end)
-
-	keepY:AddKeybind("none", "Toggle", true, function(k)
-		if type(k) == "number" then
-			keybinds.keepY = k
-			ui:Notification("Keep Y bind updated", 3)
-		end
-	end)
-
-	itemEspToggle = espSection:Toggle("Item ESP", false, function(enabled)
-		state.itemEsp = enabled
-
-		if enabled then
-			state.itemScanInitialized = false
-			state.itemCacheLastRefresh = 0
-			state.notificationQueue = {}
-		else
-			hideAllItemDrawings()
-		end
-	end)
-
-	itemEspToggle:AddKeybind("none", "Toggle", true, function(k)
-		if type(k) == "number" then
-			keybinds.itemEsp = k
-			ui:Notification("Item ESP bind updated", 3)
-		end
-	end)
-
-	espSection:Toggle("Show Box", state.espShowBox, function(v) state.espShowBox = v end)
-	espSection:Toggle("Rainbow Box", state.espRainbowBox, function(v) state.espRainbowBox = v end)
-
-	autoCollectToggle = autoCollectSection:Toggle("Auto Collect", false, function(enabled)
-		state.autoCollect = enabled
-
-		if enabled then
-			state.keepYWasEnabledBeforeCollect = state.keepY
-
-			if state.keepY then
-				keepY:Set(false)
-			end
-		else
-			state.collectPauseUntil = 0
-			state.collectHoldStartAt = 0
-			state.collectHoldUntil = 0
-			state.collectTeleportCooldownUntil = 0
-			state.collectIdlePointIndex = nil
-			state.collectIdleAtPoint = false
-			state.occupiedItemQueue = {}
-			state.occupiedQueueSize = 0
-
-			setCollectKeyState(false)
-
-			if state.keepYWasEnabledBeforeCollect then
-				keepY:Set(true)
-			end
-
-			state.keepYWasEnabledBeforeCollect = false
-		end
-	end)
-
-	autoCollectToggle:AddKeybind("none", "Toggle", true, function(k)
-		if type(k) == "number" then
-			keybinds.autoCollect = k
-			ui:Notification("Auto collect bind updated", 3)
-		end
-	end)
-
-	autoCollectSection:Slider("Fly Speed", state.collectFlySpeed, conf.collectFlySpeedStep, conf.collectFlySpeedMin, conf.collectFlySpeedMax, "", function(v)
-		state.collectFlySpeed = v
-	end)
-
-	autoCollectSection:Slider("Arrival Dist", state.collectArrivalDistance, conf.collectArrivalDistanceStep, conf.collectArrivalDistanceMin, conf.collectArrivalDistanceMax, "", function(v)
-		state.collectArrivalDistance = v
-	end)
-
-	autoCollectSection:Slider("UnderMap +Y", state.collectUnderMapYOffset, conf.collectUnderMapYOffsetStep, conf.collectUnderMapYOffsetMin, conf.collectUnderMapYOffsetMax, "", function(v)
-		state.collectUnderMapYOffset = v
-	end)
-
-	autoCollectSection:Toggle("Skip Occupied", state.autoCollectSkipOccupied, function(v)
-		state.autoCollectSkipOccupied = v
-	end)
-
-	settingsSection:Button("Unload", function() state.shouldUnload = true end)
-	_G.__bizzareLineageUnload = function() state.shouldUnload = true end
-
-	infoSection:Button("DONT DM LIKETY FOR HELP")
-	infoSection:Button("FOR ANY HELP REGARDING")
-	infoSection:Button("THE SCRIPT DM: BigJose42")
-
-	ui:Notification("PLEASE: dont dm likety for help with the script", 6)
-	ui:Notification("for help dm me: BigJose42", 6)
+	if not ok then
+		warn(text)
+	end
 end
 
--- i doubt this is useful but ai deemed this as useful
-local function processKeybindPress(bindName)
-	local keyCode = keybinds[bindName]
-	if type(keyCode) ~= "number" then
+local function setKeepYEnabled(enabled)
+	if state.keepY == enabled then
 		return
 	end
 
-	local ok, isDown = pcall(function() return iskeypressed and iskeypressed(keyCode) end)
-	if not ok then
-		isDown = false
+	state.keepY = enabled
+
+	if state.autoCollect then
+		return
 	end
 
-	local wasDown = keyDownState[keyCode] == true
-	keyDownState[keyCode] = isDown and true or false
+	if enabled then
+		local root = getRootPart()
 
-	if isDown and not wasDown then
-		if bindName == "keepY" then
-			keepY:Set(not state.keepY)
-		elseif bindName == "itemEsp" then
-			itemEspToggle:Set(not state.itemEsp)
-		elseif bindName == "autoCollect" then
-			autoCollectToggle:Set(not state.autoCollect)
+		if root then
+			local pos = root.Position
+			state.cachedReturnPosition = Vector3.new(pos.X, pos.Y, pos.Z)
+			state.keepYMotionOrigin = Vector3.new(pos.X, state.keepYLevel, pos.Z)
+		else
+			state.cachedReturnPosition = nil
+			state.keepYMotionOrigin = nil
 		end
+
+		state.keepYOffsetX = 0
+		state.keepYOffsetZ = 0
+		state.keepYDirection = 1
+
+		applyKeepYPosition(true)
+	else
+		local root = getRootPart()
+		local cached = state.cachedReturnPosition
+
+		if root and cached then
+			pcall(function()
+				root.Position = cached + Vector3.new(0, 10, 0)
+			end)
+		end
+
+		state.cachedReturnPosition = nil
+		state.keepYMotionOrigin = nil
+		state.keepYOffsetX = 0
+		state.keepYOffsetZ = 0
+		state.keepYDirection = 1
 	end
+end
+
+local function setItemEspEnabled(enabled)
+	if state.itemEsp == enabled then
+		return
+	end
+
+	state.itemEsp = enabled
+
+	if enabled then
+		state.itemScanInitialized = false
+		state.itemCacheLastRefresh = 0
+		state.notificationQueue = {}
+	else
+		hideAllItemDrawings()
+	end
+end
+
+local function setAutoCollectEnabled(enabled)
+	if state.autoCollect == enabled then
+		return
+	end
+
+	state.autoCollect = enabled
+
+	if enabled then
+		state.keepYWasEnabledBeforeCollect = state.keepY
+
+		if state.keepY then
+			UI.SetValue(uiIds.keepY, false)
+			setKeepYEnabled(false)
+		end
+
+		return
+	end
+
+	state.collectPauseUntil = 0
+	state.collectHoldStartAt = 0
+	state.collectHoldUntil = 0
+	state.collectTeleportCooldownUntil = 0
+	state.collectIdlePointIndex = nil
+	state.collectIdleAtPoint = false
+	state.occupiedItemQueue = {}
+	state.occupiedQueueSize = 0
+
+	setCollectKeyState(false)
+
+	if state.keepYWasEnabledBeforeCollect then
+		UI.SetValue(uiIds.keepY, true)
+		setKeepYEnabled(true)
+	end
+
+	state.keepYWasEnabledBeforeCollect = false
+end
+
+local function createUi()
+	pcall(function()
+		UI.RemoveTab(uiTabName)
+	end)
+
+	UI.AddTab(uiTabName, function(tab)
+		local movementSection = tab:Section("Movement", "Left")
+		movementSection:Toggle(uiIds.keepY, "Keep Y (use this to void dio)", state.keepY, function(enabled)
+			setKeepYEnabled(enabled)
+		end)
+		movementSection:SliderInt(uiIds.keepYLevel, "Y level", conf.keepYMinLevel, conf.keepYMaxLevel, state.keepYLevel, function(value)
+			state.keepYLevel = value
+
+			if state.keepY then
+				applyKeepYPosition(true)
+			end
+		end)
+
+		local espSection = tab:Section("ESP", "Left")
+		espSection:Toggle(uiIds.itemEsp, "Item ESP", state.itemEsp, function(enabled)
+			setItemEspEnabled(enabled)
+		end)
+		espSection:Toggle(uiIds.espShowBox, "Show Box", state.espShowBox, function(value)
+			state.espShowBox = value
+		end)
+		espSection:Toggle(uiIds.espRainbowBox, "Rainbow Box", state.espRainbowBox, function(value)
+			state.espRainbowBox = value
+		end)
+
+		local autoCollectSection = tab:Section("Auto Collect", "Right")
+		autoCollectSection:Toggle(uiIds.autoCollect, "Auto Collect", state.autoCollect, function(enabled)
+			setAutoCollectEnabled(enabled)
+		end)
+		autoCollectSection:SliderInt(uiIds.collectFlySpeed, "Fly Speed", conf.collectFlySpeedMin, conf.collectFlySpeedMax, state.collectFlySpeed, function(value)
+			state.collectFlySpeed = value
+		end)
+		autoCollectSection:SliderInt(uiIds.collectArrivalDistance, "Arrival Dist", conf.collectArrivalDistanceMin, conf.collectArrivalDistanceMax, state.collectArrivalDistance, function(value)
+			state.collectArrivalDistance = value
+		end)
+		autoCollectSection:SliderInt(uiIds.collectUnderMapYOffset, "UnderMap +Y", conf.collectUnderMapYOffsetMin, conf.collectUnderMapYOffsetMax, state.collectUnderMapYOffset, function(value)
+			state.collectUnderMapYOffset = value
+		end)
+		autoCollectSection:Toggle(uiIds.autoCollectSkipOccupied, "Skip Occupied", state.autoCollectSkipOccupied, function(value)
+			state.autoCollectSkipOccupied = value
+		end)
+
+		local settingsSection = tab:Section("Settings", "Right")
+		settingsSection:Button("Unload", function()
+			state.shouldUnload = true
+		end)
+
+		local infoSection = tab:Section("Important", "Right")
+		infoSection:Text("Please do not DM likety for script help.")
+		infoSection:Text("For help regarding this script:")
+		infoSection:Text("DM BigJose42.")
+	end)
+
+	_G.__bizzareLineageUnload = function() state.shouldUnload = true end
+
+	pushNotification("Please do not DM likety for help with the script.", 6)
+	pushNotification("For help with the script, DM BigJose42.", 6)
 end
 
 createUi() -- creates ui
@@ -1011,10 +999,6 @@ local function updateFrame()
 	local now = os.clock()
 	local deltaTime = math.min(now - lastFrameTime, 0.1)
 	lastFrameTime = now
-
-	processKeybindPress("keepY")
-	processKeybindPress("itemEsp")
-	processKeybindPress("autoCollect")
 
 	if state.keepY and not state.autoCollect then
 		stepKeepYSquareMovement(deltaTime)
@@ -1035,7 +1019,7 @@ local function updateFrame()
 	if #state.notificationQueue > 0 and os.clock() - state.lastNotificationAt >= runtime.notificationCooldown then
 		local text = table.remove(state.notificationQueue, 1)
 		state.lastNotificationAt = os.clock()
-		ui:Notification(text, 4)
+		pushNotification(text, 4)
 	end
 end
 
@@ -1052,6 +1036,13 @@ task.spawn(function()
 				if state.frameErrorCount >= 20 then
 					state.autoCollect = false
 					state.itemEsp = false
+					state.keepY = false
+
+					pcall(function()
+						UI.SetValue(uiIds.autoCollect, false)
+						UI.SetValue(uiIds.itemEsp, false)
+						UI.SetValue(uiIds.keepY, false)
+					end)
 
 					setCollectKeyState(false)
 					hideAllItemDrawings()
@@ -1066,10 +1057,11 @@ task.spawn(function()
 end)
 
 while not state.shouldUnload do
-	UILib:Step()
 	task.wait() -- removing this will FUCK OVER matcha making it crash 99% of the times
 end
 
 removeAllItemDrawings()
 setCollectKeyState(false)
-ui:Unload()
+pcall(function()
+	UI.RemoveTab(uiTabName)
+end)
