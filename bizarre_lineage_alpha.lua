@@ -1,8 +1,3 @@
-if not UI or not UI.AddTab then
-	warn("Matcha built-in UI is not available.")
-	return
-end
-
 local players = game:GetService("Players")
 local workspace = game:GetService("Workspace")
 local player = players.LocalPlayer
