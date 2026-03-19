@@ -973,8 +973,7 @@ local function getUiBoolean(id, fallback)
 	return fallback
 end
 
-local function processUiKeybind(id, callback)
-	local isActive = getUiBoolean(id, false)
+local function processKeybindState(id, isActive, callback)
 	local wasActive = keybindDownState[id] == true
 	keybindDownState[id] = isActive
 
@@ -984,18 +983,6 @@ local function processUiKeybind(id, callback)
 end
 
 local function syncStateFromUi()
-	processUiKeybind(uiIds.keepYKeybind, function()
-		UI.SetValue(uiIds.keepY, not state.keepY)
-	end)
-
-	processUiKeybind(uiIds.itemEspKeybind, function()
-		UI.SetValue(uiIds.itemEsp, not state.itemEsp)
-	end)
-
-	processUiKeybind(uiIds.autoCollectKeybind, function()
-		UI.SetValue(uiIds.autoCollect, not state.autoCollect)
-	end)
-
 	local keepYEnabled = getUiBoolean(uiIds.keepY, state.keepY)
 	if keepYEnabled ~= state.keepY then
 		setKeepYEnabled(keepYEnabled)
@@ -1044,8 +1031,11 @@ local function createUi()
 	UI.AddTab(uiTabName, function(tab)
 		local movementSection = tab:Section("Movement", "Left")
 		movementSection:Toggle(uiIds.keepY, "Keep Y (use this to void dio)")
-		local keepYKeybind = movementSection:Keybind(uiIds.keepYKeybind, 0, "click")
+		local keepYKeybind = movementSection:Keybind(uiIds.keepYKeybind, 0, "toggle")
 		keepYKeybind:AddToHotkey("Keep Y", uiIds.keepY)
+		processKeybindState(uiIds.keepYKeybind, keepYKeybind.value == true, function()
+			UI.SetValue(uiIds.keepY, not state.keepY)
+		end)
 		movementSection:SliderInt(
 			uiIds.keepYLevelOffset,
 			"Y level",
@@ -1055,15 +1045,21 @@ local function createUi()
 
 		local espSection = tab:Section("ESP", "Left")
 		espSection:Toggle(uiIds.itemEsp, "Item ESP")
-		local itemEspKeybind = espSection:Keybind(uiIds.itemEspKeybind, 0, "click")
+		local itemEspKeybind = espSection:Keybind(uiIds.itemEspKeybind, 0, "toggle")
 		itemEspKeybind:AddToHotkey("Item ESP", uiIds.itemEsp)
+		processKeybindState(uiIds.itemEspKeybind, itemEspKeybind.value == true, function()
+			UI.SetValue(uiIds.itemEsp, not state.itemEsp)
+		end)
 		espSection:Toggle(uiIds.espShowBox, "Show Box")
 		espSection:Toggle(uiIds.espRainbowBox, "Rainbow Box")
 
 		local autoCollectSection = tab:Section("Auto Collect", "Right")
 		autoCollectSection:Toggle(uiIds.autoCollect, "Auto Collect")
-		local autoCollectKeybind = autoCollectSection:Keybind(uiIds.autoCollectKeybind, 0, "click")
+		local autoCollectKeybind = autoCollectSection:Keybind(uiIds.autoCollectKeybind, 0, "toggle")
 		autoCollectKeybind:AddToHotkey("Auto Collect", uiIds.autoCollect)
+		processKeybindState(uiIds.autoCollectKeybind, autoCollectKeybind.value == true, function()
+			UI.SetValue(uiIds.autoCollect, not state.autoCollect)
+		end)
 		autoCollectSection:SliderInt(uiIds.collectFlySpeed, "Fly Speed", conf.collectFlySpeedMin, conf.collectFlySpeedMax)
 		autoCollectSection:SliderInt(uiIds.collectArrivalDistance, "Arrival Dist", conf.collectArrivalDistanceMin, conf.collectArrivalDistanceMax)
 		autoCollectSection:SliderInt(uiIds.collectUnderMapYOffset, "UnderMap +Y", conf.collectUnderMapYOffsetMin, conf.collectUnderMapYOffsetMax)
